@@ -2,6 +2,7 @@ package com.bryzek.dependency.actors
 
 import com.bryzek.dependency.api.lib.{DefaultLibraryArtifactProvider, Dependencies, GithubDependencyProviderClient, GithubHelper, GithubUtil}
 import com.bryzek.dependency.v0.models.{Binary, BinaryForm, BinaryType, Library, LibraryForm, Project, ProjectBinary, ProjectLibrary, RecommendationType, VersionForm}
+import io.flow.github.v0.models.{HookConfig, HookEvent, HookForm}
 import io.flow.postgresql.Pager
 import io.flow.play.actors.ErrorHandler
 import io.flow.play.util.Config
@@ -49,7 +50,7 @@ class ProjectActor @javax.inject.Inject() (
 
   private[this] val HookBaseUrl = config.requiredString("dependency.api.host") + "/webhooks/github/"
   private[this] val HookName = "web"
-  private[this] val HookEvents = Seq(io.flow.github.v0.models.HookEvent.Push)
+  private[this] val HookEvents = Seq(HookEvent.Push)
 
   private[this] lazy val dataProject: Option[Project] = ProjectsDao.findById(Authorization.All, projectId)
 
@@ -102,29 +103,23 @@ class ProjectActor @javax.inject.Inject() (
 
                 client.hooks.get(repo.owner, repo.project).map { hooks =>
                   val targetUrl = HookBaseUrl + project.id
-                  println(s"Got back from call to get targetUrl[$targetUrl]")
-
-                  hooks.foreach { hook =>
-                    println(s"hook id[${hook.id}] url[${hook.url}]")
-                  }
                   hooks.find(_.config.url == Some(targetUrl)) match {
                     case Some(hook) => {
-                      println("  - existing hook found: " + hook.id)
-                      println("  - existing hook events: " + hook.events)
+                      // No-op
                     }
                     case None => {
-                      println("  - hook not found. Creating")
-                      println(s"  - HookEvents: ${HookEvents}")
                       client.hooks.post(
                         owner = repo.owner,
                         repo = repo.project,
-                        name = HookName,
-                        config = io.flow.github.v0.models.HookConfig(
-                          url = Some(targetUrl),
-                          contentType = Some("json")
-                        ),
-                        events = HookEvents,
-                        active = true
+                        HookForm(
+                          name = HookName,
+                          config = HookConfig(
+                            url = Some(targetUrl),
+                            contentType = Some("json")
+                          ),
+                          events = HookEvents,
+                          active = true
+                        )
                       )
                     }.map { hook =>
                       println("  - hook created: " + hook)
